@@ -9,105 +9,72 @@ import {
   SafeAreaView,
 } from "react-native";
 import { useState, useEffect } from "react";
-import RepoCard from "../component/RepoCard";
+import RepoCard from "../../component/RepoCard";
+import { connect } from "react-redux";
+import {
+  GET_NEXT_PAGE,
+  GET_REPO_REQUEST,
+  SET_SEARCH_QUERY,
+} from "../../redux/repo/actions";
 
-export default function HomePage({ navigation }) {
-  const [repoList, setRepoList] = useState([]); // list of repo data
-  const [responseCache, setResponseCache] = useState({}); // storing repetitive data like total_counts from first load
-  const [page, setPage] = useState(1); // page index
-  const [searchQuery, setSearchQuery] = useState(""); // search query from text field
-  const [error, setError] = useState(""); // error state
-  const [hasMore, setHasMore] = useState(true); // infinite scroll cont state
-  const [isFetching, setIsFetching] = useState(false); // loading state from api
-  const [mutate, setMutate] = useState(false); // update page search req
+function mapStateToProps(state, props) {
+  return state;
+}
 
-  //fetch from git api and update states
-  async function fetchRepoData() {
-    if (!isFetching) {
-      setIsFetching(true);
-      try {
-        const url = `https://api.github.com/search/repositories?q=topic:react-native${
-          searchQuery.length
-            ? `+in:title ${encodeURIComponent(`${searchQuery}`)}+in:iname`
-            : ``
-        }&page=${page}`;
+const mapDispatchToProps = (dispatch, props) => ({
+  fetchRepoData: () => {
+    dispatch({
+      type: GET_REPO_REQUEST,
+    });
+  },
+  getNextPage: () => {
+    dispatch({
+      type: GET_NEXT_PAGE,
+    });
+  },
+  setSearchQuery: (searchInput) => {
+    dispatch({
+      type: SET_SEARCH_QUERY,
+      payload: { searchQuery: searchInput },
+    });
+  },
+});
 
-        const response = await fetch(url, { method: "GET" });
+function HomePageView({
+  navigation,
+  repoList,
+  responseCache,
+  isFetching,
+  error,
+  hasMore,
+  fetchRepoData,
+  getNextPage,
+  setSearchQuery,
+  page,
+  searchQuery,
+}) {
+  const [searchInput, setSearchInput] = useState("");
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch repositories");
-        }
+  useEffect(() => {
+    fetchRepoData();
+  }, []);
 
-        const data = await response.json();
-
-        // Update data list
-        setRepoList((repoList) => [...repoList, ...data.items]);
-
-        // Save meta data
-        setResponseCache({
-          total_count: data.total_count ?? 0,
-          incomplete_result: data.incomplete_result ?? false,
-        });
-      } catch (error) {
-        setError(error);
-      } finally {
-        setIsFetching(false);
-      }
-    }
-  }
-
-  //next page
-  function getNextPage() {
-    if (hasMore && !isFetching) {
-      setPage((page) => page + 1);
-      setMutate(true);
-    }
-  }
-
-  //set search query with debounce
   function handleSearchInputChange(text) {
-    setSearchQuery(text);
-  }
-
-  // fetch data
-  useEffect(
-    function () {
-      fetchRepoData();
-      setMutate(false);
-    },
-    [mutate]
-  );
-
-  //check if infinite scroll still has more data
-  useEffect(
-    function () {
-      if (repoList?.length >= responseCache?.total_count) {
-        setHasMore(false);
-      }
-    },
-    [repoList.length, responseCache.total_count]
-  );
-
-  //on search
-  function searchHandler() {
-    setPage(1);
-    setError({});
-    setHasMore(true);
-    setRepoList([]);
-    setResponseCache({});
-    setMutate(true);
+    setSearchInput(text);
   }
 
   let debounceTimer;
-  useEffect(
-    function () {
+  useEffect(() => {
+    clearTimeout(debounceTimer);
+
+    debounceTimer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 500);
+
+    return () => {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        searchHandler();
-      }, 500);
-    },
-    [searchQuery]
-  );
+    };
+  }, [searchInput]);
 
   // Infinite Scroll Loader Component
   function ListFooter() {
@@ -138,7 +105,7 @@ export default function HomePage({ navigation }) {
 
   return (
     <>
-      <StatusBar translucent barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.pageContainer}>
         <View style={styles.pageContent}>
           <Text style={{ fontSize: 24, fontWeight: "bold" }}>Home Page</Text>
@@ -156,10 +123,10 @@ export default function HomePage({ navigation }) {
               placeholder="Search"
             />
           </View>
-
           {error?.message ? (
             <Text style={{ color: "red" }}> Error: {error?.message}</Text>
           ) : null}
+
           {searchQuery ? (
             <Text style={{ fontWeight: "bold" }}>
               Searching for "{searchQuery}"
@@ -170,6 +137,7 @@ export default function HomePage({ navigation }) {
             Results
           </Text>
         </View>
+
         {repoList?.length ? (
           <FlatList
             style={styles.scrollContainer}
@@ -216,3 +184,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 });
+
+const HomePage = connect(mapStateToProps, mapDispatchToProps)(HomePageView);
+
+export default HomePage;
